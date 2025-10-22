@@ -6,7 +6,8 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/imgui",
                 "${workspaceFolder}/imgui/backends",
-                "/opt/homebrew/Cellar/glfw/3.4/include"
+                "/opt/homebrew/Cellar/glfw/3.4/include",
+                "/opt/homebrew/Cellar/onnxruntime/1.22.2_5/include/onnxruntime"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",
