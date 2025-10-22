@@ -1,7 +1,8 @@
 # Compiler and flags
 CXX = clang++
 CXXFLAGS = -std=c++23 -Wall
-LIBS = -lglfw -framework OpenGL -framework Cocoa -framework IOKit -L/opt/homebrew/Cellar/glfw/3.4/lib
+LIBS = -lglfw -framework OpenGL -framework Cocoa -framework IOKit -L/opt/homebrew/Cellar/glfw/3.4/lib \
+	   -L/opt/homebrew/Cellar/onnxruntime/1.22.2_5/lib -lonnxruntime
 
 # Directories
 IMGUI_DIR = imgui
@@ -26,10 +27,11 @@ SOURCES = $(IMGUI_SOURCES) $(APP_SOURCES)
 OBJS = $(SOURCES:.cpp=.o)
 
 # Output executable
-TARGET = imgui_app
+TARGET = sowai
 
 # Include paths
-INCLUDES = -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -I/opt/homebrew/Cellar/glfw/3.4/include
+INCLUDES = -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -I/opt/homebrew/Cellar/glfw/3.4/include \
+		   -I/opt/homebrew/Cellar/onnxruntime/1.22.2_5/include/onnxruntime
 
 # Build rules
 all: $(TARGET)

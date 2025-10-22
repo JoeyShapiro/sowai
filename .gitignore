@@ -1,1 +1,6 @@
 data
+*.o
+out/
+*.pth
+*.onnx
+imgui.ini
