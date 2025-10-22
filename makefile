@@ -1,6 +1,6 @@
 # Compiler and flags
-CXX = g++
-CXXFLAGS = -std=c++11 -Wall
+CXX = clang++
+CXXFLAGS = -std=c++23 -Wall
 LIBS = -lglfw -framework OpenGL -framework Cocoa -framework IOKit -L/opt/homebrew/Cellar/glfw/3.4/lib
 
 # Directories
