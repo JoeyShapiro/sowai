@@ -115,7 +115,7 @@ int main(int, char**)
         ImGui::Begin("MyWindow", nullptr, flags);
         time_t now = time(0);
         tm* ltm = localtime(&now);
-        int hour = ltm->tm_hour;
+        int hour = ltm->tm_hour%12;
         int minute = ltm->tm_min;
         int second = ltm->tm_sec;
 
@@ -126,7 +126,8 @@ int main(int, char**)
         }
         
         // Prepare labels: [0, 1, 2, 3, 4, 5]
-        std::vector<int64_t> labels = {0, 1, 2, 3, 4, 5};
+        // TODO might be slow
+        std::vector<int64_t> labels = {hour/10, hour%10, minute/10, minute%10, second/10, second%10};
         
         // Input shapes
         std::vector<int64_t> noise_shape = {6, 100};
@@ -180,6 +181,7 @@ int main(int, char**)
                     // Position in the combined texture (6 images side by side)
                     int tex_x = b * width + x;  // Horizontal offset for batch
                     int i = (y * width * 6 + tex_x) * 4;
+                    // TODO look into all of this
 
                     int pixel = output_data[offset + y * width + x] * 255;
                     pixels[i + 0] = pixel; // Red
