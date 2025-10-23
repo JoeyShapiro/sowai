@@ -76,8 +76,17 @@ int main(int, char**)
     
     // Get input/output names
     Ort::AllocatorWithDefaultOptions allocator;
+    
+    // Create input tensors
+    auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    
+    // Input and output names
+    std::vector<Ort::Value> input_tensors;
+    const char* input_names[] = {"noise", "label"};
+    const char* output_names[] = {"image"};
 
     // Main loop
+    static double last_time = 0.0;
     while (!glfwWindowShouldClose(window))
     {
         // Poll and handle events (inputs, window resize, etc.)
@@ -91,8 +100,6 @@ int main(int, char**)
             ImGui_ImplGlfw_Sleep(10);
             continue;
         }
-
-        // ImGui_ImplGlfw_Sleep(30);
 
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
@@ -112,41 +119,34 @@ int main(int, char**)
         int minute = ltm->tm_min;
         int second = ltm->tm_sec;
 
-        // Prepare inputs: noise (1, 100) and label (1)
-        std::vector<float> noise(100);
-        for (int i = 0; i < 100; i++) {
-            noise[i] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;  // Random [-1, 1]
+        // Prepare noise: (6, 100)
+        std::vector<float> noise(6 * 100);
+        for (int i = 0; i < 6 * 100; i++) {
+            noise[i] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
         }
         
-        int64_t label = 5;  // Generate digit 5
+        // Prepare labels: [0, 1, 2, 3, 4, 5]
+        std::vector<int64_t> labels = {0, 1, 2, 3, 4, 5};
         
         // Input shapes
-        std::vector<int64_t> noise_shape = {1, 100};
-        std::vector<int64_t> label_shape = {1};
-        
-        // Create input tensors
-        auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-        
+        std::vector<int64_t> noise_shape = {6, 100};
+        std::vector<int64_t> label_shape = {6};
+
         Ort::Value noise_tensor = Ort::Value::CreateTensor<float>(
-            memory_info, noise.data(), noise.size(), 
+            memory_info, noise.data(), noise.size(),
             noise_shape.data(), noise_shape.size()
         );
         
         Ort::Value label_tensor = Ort::Value::CreateTensor<int64_t>(
-            memory_info, &label, 1,
+            memory_info, labels.data(), labels.size(),
             label_shape.data(), label_shape.size()
         );
         
-        // Input and output names
-        const char* input_names[] = {"noise", "label"};
-        const char* output_names[] = {"image"};
-        
         // Run inference
-        std::vector<Ort::Value> input_tensors;
+        input_tensors.clear();
         input_tensors.push_back(std::move(noise_tensor));
         input_tensors.push_back(std::move(label_tensor));
-        
-        // get the current time
+
         // auto start = std::chrono::high_resolution_clock::now();
         auto output_tensors = session.Run(
             Ort::RunOptions{nullptr},
@@ -161,7 +161,7 @@ int main(int, char**)
         // 1. Create texture once (in your initialization)
         int width = 28;
         int height = 28;
-        unsigned char* pixels = new unsigned char[width * height * 4]; // RGBA
+        unsigned char* pixels = new unsigned char[width*6 * height * 4]; // RGBA
         GLuint textureID;
         glGenTextures(1, &textureID);
         glBindTexture(GL_TEXTURE_2D, textureID);
@@ -170,20 +170,30 @@ int main(int, char**)
 
         // 2. Update pixel data each frame
         // Fill your pixels array with RGBA values (0-255 each)
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int i = (x * width + y) * 4;
-                pixels[i + 0] = output_data[x * 28 + y] * 255; // Red
-                pixels[i + 1] = output_data[x * 28 + y] * 255; // Green
-                pixels[i + 2] = output_data[x * 28 + y] * 255; // Blue
-                pixels[i + 3] = 255; // Alpha
+        for (int b = 0; b < 6; b++) {
+            // Each image is 28x28, offset by b * 28 * 28
+            int offset = b * 28 * 28;
+            
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    // int i = (y * width + x) * 4;
+                    // Position in the combined texture (6 images side by side)
+                    int tex_x = b * width + x;  // Horizontal offset for batch
+                    int i = (y * width * 6 + tex_x) * 4;
+
+                    int pixel = output_data[offset + y * width + x] * 255;
+                    pixels[i + 0] = pixel; // Red
+                    pixels[i + 1] = pixel; // Green
+                    pixels[i + 2] = pixel; // Blue
+                    pixels[i + 3] = 255; // Alpha
+                }
             }
         }
 
         // Upload to GPU
         glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-        ImGui::Image((void*)(intptr_t)textureID, ImVec2(width*5, height *5));
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width*6, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        ImGui::Image((void*)(intptr_t)textureID, ImVec2(width*6*5, height *5));
 
         ImGui::End();
 
@@ -197,6 +207,15 @@ int main(int, char**)
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window);
+
+        // sleep until it has been 1 second since last frame
+        double current_time = glfwGetTime();
+        double delta_time = current_time - last_time;
+        if (delta_time < 1.0) {
+            // glfwWaitEventsTimeout(1.0 - delta_time);
+            ImGui_ImplGlfw_Sleep((1.0 - delta_time) * 1000.0);
+        }
+        last_time = current_time;
     }
 
     // Cleanup
