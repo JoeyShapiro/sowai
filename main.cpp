@@ -9,6 +9,7 @@
 #include <onnxruntime_cxx_api.h>
 #include <vector>
 #include <cstdlib>
+#include <filesystem>
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -70,8 +71,13 @@ int main(int, char**)
     // Create ONNX Runtime environment
     Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "sowai");
     Ort::SessionOptions session_options;
-    
+
     // Load model
+    if (!std::filesystem::exists("generator.onnx")) {
+        printf("model file 'generator.onnx' not found!\n");
+        return 1;
+    }
+    
     Ort::Session session(env, "generator.onnx", session_options);
     
     // Get input/output names
@@ -213,9 +219,9 @@ int main(int, char**)
         // sleep until it has been 1 second since last frame
         double current_time = glfwGetTime();
         double delta_time = current_time - last_time;
-        if (delta_time < 1.0) {
+        if (delta_time < 0.3) {
             // glfwWaitEventsTimeout(1.0 - delta_time);
-            ImGui_ImplGlfw_Sleep((1.0 - delta_time) * 1000.0);
+            ImGui_ImplGlfw_Sleep((0.3 - delta_time) * 1000.0);
         }
         last_time = current_time;
     }

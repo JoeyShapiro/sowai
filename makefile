@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX = clang++
-CXXFLAGS = -std=c++23 -Wall
+CXXFLAGS = -std=c++23 -Wall -ggdb
 LIBS = -lglfw -framework OpenGL -framework Cocoa -framework IOKit -L/opt/homebrew/Cellar/glfw/3.4/lib \
 	   -L/opt/homebrew/Cellar/onnxruntime/1.22.2_5/lib -lonnxruntime
 
