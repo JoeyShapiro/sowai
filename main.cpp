@@ -7,6 +7,8 @@
 #include <vector>
 #include <cstdlib>
 #include <filesystem>
+#include <chrono>
+#include <thread>
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -29,7 +31,7 @@ int main(int, char**)
     }
 
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Enable vsync
+    glfwSwapInterval(1);
 
     // Initialize random seed
     srand(time(NULL));
@@ -63,14 +65,9 @@ int main(int, char**)
     glPixelZoom(scale, scale);
 
     // Main loop
-    static double last_time = 0.0;
     while (!glfwWindowShouldClose(window))
     {
-        // Poll and handle events (inputs, window resize, etc.)
-        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-        // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
-        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
-        // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
+        auto frame_start = std::chrono::high_resolution_clock::now();
         glfwPollEvents();
 
         time_t now = time(0);
@@ -180,14 +177,14 @@ int main(int, char**)
 
         glfwSwapBuffers(window);
 
-        // sleep until it has been 1 second since last frame
-        double current_time = glfwGetTime();
-        double delta_time = current_time - last_time;
-        if (delta_time < 0.3) {
-            // glfwWaitEventsTimeout(1.0 - delta_time);
-            // ImGui_ImplGlfw_Sleep((0.3 - delta_time) * 1000.0);
+        // Calculate elapsed time and sleep if needed
+        auto frame_end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = frame_end - frame_start;
+        
+        if (elapsed.count() < 0.33) {
+            std::chrono::duration<double> sleep_time(0.33 - elapsed.count());
+            std::this_thread::sleep_for(sleep_time);
         }
-        last_time = current_time;
     }
 
     // Cleanup
