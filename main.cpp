@@ -20,16 +20,6 @@ int main(int, char**)
     if (!glfwInit())
         return 1;
 
-#if defined(__APPLE__)
-    // Request OpenGL 4.1 Core Profile (highest on macOS)
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // Required on macOS
-#else
-    #error "glsl_version not defined for this platform"
-#endif
-
     // Create window
     GLFWwindow* window = glfwCreateWindow(800, 600, "sowai", NULL, NULL);
     if (!window) {
@@ -66,6 +56,11 @@ int main(int, char**)
     std::vector<Ort::Value> input_tensors;
     const char* input_names[] = {"noise", "label"};
     const char* output_names[] = {"image"};
+
+    // Calculate scale factor to fill the window width
+    float scale = 800.0f / (28.0f * 6.0f);
+    // Set pixel zoom to scale the image
+    glPixelZoom(scale, scale);
 
     // Main loop
     static double last_time = 0.0;
@@ -127,12 +122,8 @@ int main(int, char**)
         // 1. Create texture once (in your initialization)
         int width = 28;
         int height = 28;
-        unsigned char* pixels = new unsigned char[width*6 * height * 4]; // RGBA
-        GLuint textureID;
-        glGenTextures(1, &textureID);
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        // unsigned char* pixels = new unsigned char[width*6 * height * 4]; // RGB
+        unsigned char* pixels = new unsigned char[28*6 * 28 * 3];
 
         // 2. Update pixel data each frame
         // Fill your pixels array with RGBA values (0-255 each)
@@ -142,17 +133,19 @@ int main(int, char**)
             
             for (int y = 0; y < height; y++) {
                 for (int x = 0; x < width; x++) {
+                    int flipped_x = (height - 1 - x);
+                    int flipped_y = (width - 1 - y);
                     // int i = (y * width + x) * 4;
                     // Position in the combined texture (6 images side by side)
-                    int tex_x = b * width + x;  // Horizontal offset for batch
-                    int i = (y * width * 6 + tex_x) * 4;
+                    int tex_x = b * width + flipped_x;  // Horizontal offset for batch
+                    int i = (y * width * 6 + tex_x) * 3;
                     // TODO look into all of this
 
-                    int pixel = output_data[offset + y * width + x] * 255;
+                    int pixel = output_data[offset + flipped_y * width + flipped_x] * 255;
                     pixels[i + 0] = pixel; // Red
                     pixels[i + 1] = pixel; // Green
                     pixels[i + 2] = pixel; // Blue
-                    pixels[i + 3] = 255; // Alpha
+                    // pixels[i + 3] = 255; // Alpha
                 }
             }
         }
@@ -164,40 +157,26 @@ int main(int, char**)
         then just use mfb. dont think it really goes to gpu
         */
 
-        // Upload to GPU
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width*6, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
         // Rendering
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
         glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        // Set up orthographic projection to match window coordinates
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        glOrtho(0, display_w, display_h, 0, -1, 1); // Top-left origin
+        glOrtho(0, 800, 0, 600, -1, 1);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
 
+        // Calculate position to center the pixels
+        float centerX = (800 - 28*6) / 2.0f;
+        float centerY = (600 - 28) / 2.0f;
+
+        // Position for drawing (raster position)
+        glRasterPos2f(centerX, centerY);
+
         // Calculate centered position
-        int textureWidth = width * 6;
-        int textureHeight = height;
-        float x = (display_w - textureWidth) / 2.0f;
-        float y = (display_h - textureHeight) / 2.0f;
-
-        // Draw texture
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, textureID);
-
-        // Draw centered quad
-        glBegin(GL_QUADS);
-            glTexCoord2f(0, 0); glVertex2f(x, y);
-            glTexCoord2f(1, 0); glVertex2f(x + textureWidth, y);
-            glTexCoord2f(1, 1); glVertex2f(x + textureWidth, y + textureHeight);
-            glTexCoord2f(0, 1); glVertex2f(x, y + textureHeight);
-        glEnd();
+        glDrawPixels(28*6, 28, GL_RGB, GL_UNSIGNED_BYTE, pixels);
 
         glfwSwapBuffers(window);
 
