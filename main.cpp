@@ -1,6 +1,3 @@
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
 #include <stdio.h>
 #define GL_SILENCE_DEPRECATION
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
@@ -24,46 +21,25 @@ int main(int, char**)
         return 1;
 
 #if defined(__APPLE__)
-    // GL 3.2 + GLSL 150
-    const char* glsl_version = "#version 150";
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
+    // Request OpenGL 4.1 Core Profile (highest on macOS)
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // Required on macOS
 #else
     #error "glsl_version not defined for this platform"
 #endif
 
-    // Create window with graphics context
-    float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor()); // Valid on GLFW 3.3+ only
-    GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "sowai", nullptr, nullptr);
-    if (window == nullptr)
-        return 1;
+    // Create window
+    GLFWwindow* window = glfwCreateWindow(800, 600, "sowai", NULL, NULL);
+    if (!window) {
+        printf("Failed to create window\n");
+        glfwTerminate();
+        return -1;
+    }
+
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1); // Enable vsync
-
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
-
-    // Setup scaling
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
-    style.FontScaleDpi = main_scale;        // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation purpose)
-
-    // Setup Platform/Renderer backends
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init(glsl_version);
-
-    // Our state
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Initialize random seed
     srand(time(NULL));
@@ -101,24 +77,7 @@ int main(int, char**)
         // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
         // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
         glfwPollEvents();
-        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0)
-        {
-            ImGui_ImplGlfw_Sleep(10);
-            continue;
-        }
 
-        // Start the Dear ImGui frame
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        // put text on the frame
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | 
-                        //  ImGuiWindowFlags_NoResize | 
-                         ImGuiWindowFlags_NoMove | 
-                         ImGuiWindowFlags_NoCollapse;
-
-        ImGui::Begin("MyWindow", nullptr, flags);
         time_t now = time(0);
         tm* ltm = localtime(&now);
         int hour = ltm->tm_hour%12;
@@ -198,21 +157,47 @@ int main(int, char**)
             }
         }
 
+        /*
+        TODO
+        just commit this gpu idea. it cant work, and dont like opengl
+        then try just drawing pixels. not sure i am saving a lot of resources with gpu. i mean, onnx is the real problem
+        then just use mfb. dont think it really goes to gpu
+        */
+
         // Upload to GPU
         glBindTexture(GL_TEXTURE_2D, textureID);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width*6, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-        ImGui::Image((void*)(intptr_t)textureID, ImVec2(width*6*5, height *5));
-
-        ImGui::End();
 
         // Rendering
-        ImGui::Render();
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
-        glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
+        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
         glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(0, display_w, display_h, 0, -1, 1); // Top-left origin
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        // Calculate centered position
+        int textureWidth = width * 6;
+        int textureHeight = height;
+        float x = (display_w - textureWidth) / 2.0f;
+        float y = (display_h - textureHeight) / 2.0f;
+
+        // Draw texture
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, textureID);
+
+        // Draw centered quad
+        glBegin(GL_QUADS);
+            glTexCoord2f(0, 0); glVertex2f(x, y);
+            glTexCoord2f(1, 0); glVertex2f(x + textureWidth, y);
+            glTexCoord2f(1, 1); glVertex2f(x + textureWidth, y + textureHeight);
+            glTexCoord2f(0, 1); glVertex2f(x, y + textureHeight);
+        glEnd();
 
         glfwSwapBuffers(window);
 
@@ -221,16 +206,12 @@ int main(int, char**)
         double delta_time = current_time - last_time;
         if (delta_time < 0.3) {
             // glfwWaitEventsTimeout(1.0 - delta_time);
-            ImGui_ImplGlfw_Sleep((0.3 - delta_time) * 1000.0);
+            // ImGui_ImplGlfw_Sleep((0.3 - delta_time) * 1000.0);
         }
         last_time = current_time;
     }
 
     // Cleanup
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-
     glfwDestroyWindow(window);
     glfwTerminate();
 
