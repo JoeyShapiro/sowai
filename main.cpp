@@ -22,8 +22,11 @@ int main(int, char**)
     if (!glfwInit())
         return 1;
 
+    int window_width = 800;
+    int window_height = 600;
+
     // Create window
-    GLFWwindow* window = glfwCreateWindow(800, 600, "sowai", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(window_width, window_height, "sowai", NULL, NULL);
     if (!window) {
         printf("Failed to create window\n");
         glfwTerminate();
@@ -59,10 +62,18 @@ int main(int, char**)
     const char* input_names[] = {"noise", "label"};
     const char* output_names[] = {"image"};
 
-    // Calculate scale factor to fill the window width
-    float scale = 800.0f / (28.0f * 6.0f);
-    // Set pixel zoom to scale the image
-    glPixelZoom(scale, scale);
+    int img_width = 28;
+    int img_height = 28;
+    int batch_size = 6;
+
+    unsigned char* pixels = new unsigned char[img_width * batch_size * img_height * 3];
+    float* noise = new float[batch_size * 100];
+    // Prepare labels: [0, 1, 2, 3, 4, 5]
+    int64_t* labels = new int64_t[batch_size];
+
+    // Input shapes
+    int64_t* noise_shape = new int64_t[2]{batch_size, 100};
+    int64_t* label_shape = new int64_t[1]{batch_size};
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -75,29 +86,26 @@ int main(int, char**)
         int hour = ltm->tm_hour%12;
         int minute = ltm->tm_min;
         int second = ltm->tm_sec;
+        labels[0] = hour / 10;
+        labels[1] = hour % 10;
+        labels[2] = minute / 10;
+        labels[3] = minute % 10;
+        labels[4] = second / 10;
+        labels[5] = second % 10;
 
         // Prepare noise: (6, 100)
-        std::vector<float> noise(6 * 100);
         for (int i = 0; i < 6 * 100; i++) {
             noise[i] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
         }
-        
-        // Prepare labels: [0, 1, 2, 3, 4, 5]
-        // TODO might be slow
-        std::vector<int64_t> labels = {hour/10, hour%10, minute/10, minute%10, second/10, second%10};
-        
-        // Input shapes
-        std::vector<int64_t> noise_shape = {6, 100};
-        std::vector<int64_t> label_shape = {6};
 
         Ort::Value noise_tensor = Ort::Value::CreateTensor<float>(
-            memory_info, noise.data(), noise.size(),
-            noise_shape.data(), noise_shape.size()
+            memory_info, noise, batch_size * 100,
+            noise_shape, 2
         );
         
         Ort::Value label_tensor = Ort::Value::CreateTensor<int64_t>(
-            memory_info, labels.data(), labels.size(),
-            label_shape.data(), label_shape.size()
+            memory_info, labels, batch_size,
+            label_shape, 1
         );
         
         // Run inference
@@ -115,34 +123,26 @@ int main(int, char**)
     
         // Get output (28x28 image)
         float* output_data = output_tensors[0].GetTensorMutableData<float>();
-    
-        // 1. Create texture once (in your initialization)
-        int width = 28;
-        int height = 28;
-        // unsigned char* pixels = new unsigned char[width*6 * height * 4]; // RGB
-        unsigned char* pixels = new unsigned char[28*6 * 28 * 3];
 
         // 2. Update pixel data each frame
         // Fill your pixels array with RGBA values (0-255 each)
-        for (int b = 0; b < 6; b++) {
+        for (int b = 0; b < batch_size; b++) {
             // Each image is 28x28, offset by b * 28 * 28
-            int offset = b * 28 * 28;
+            int offset = b * img_height * img_width;
             
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    int flipped_x = (height - 1 - x);
-                    int flipped_y = (width - 1 - y);
-                    // int i = (y * width + x) * 4;
-                    // Position in the combined texture (6 images side by side)
-                    int tex_x = b * width + flipped_x;  // Horizontal offset for batch
-                    int i = (y * width * 6 + tex_x) * 3;
-                    // TODO look into all of this
+            for (int y = 0; y < img_height; y++) {
+                for (int x = 0; x < img_width; x++) {
+                    int flipped_x = (img_height - 1 - x);
+                    int flipped_y = (img_width - 1 - y);
 
-                    int pixel = output_data[offset + flipped_y * width + flipped_x] * 255;
+                    // Position in the combined texture (6 images side by side)
+                    int tex_x = b * img_width + flipped_x;  // Horizontal offset for batch
+                    int i = (y * img_width * batch_size + tex_x) * 3;
+
+                    int pixel = output_data[offset + flipped_y * img_width + flipped_x] * 255;
                     pixels[i + 0] = pixel; // Red
                     pixels[i + 1] = pixel; // Green
                     pixels[i + 2] = pixel; // Blue
-                    // pixels[i + 3] = 255; // Alpha
                 }
             }
         }
@@ -152,7 +152,21 @@ int main(int, char**)
         just commit this gpu idea. it cant work, and dont like opengl
         then try just drawing pixels. not sure i am saving a lot of resources with gpu. i mean, onnx is the real problem
         then just use mfb. dont think it really goes to gpu
+        meh. this is fine for now
         */
+
+        glfwGetFramebufferSize(window, &window_width, &window_height);
+        // Calculate scale factor to fill the window width
+        float scale = (float)window_width / (img_width * batch_size);
+        // Set pixel zoom to scale the image
+        glPixelZoom(scale, scale);
+
+        // Calculate position to center the pixels
+        float centerX = (window_width - img_width * batch_size) / 2.0f;
+        float centerY = (window_height - img_height) / 2.0f;
+
+        // Position for drawing (raster position)
+        glRasterPos2f(centerX, centerY);
 
         // Rendering
         glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
@@ -161,19 +175,12 @@ int main(int, char**)
         // Set up orthographic projection to match window coordinates
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        glOrtho(0, 800, 0, 600, -1, 1);
+        glOrtho(0, window_width, 0, window_height, -1, 1);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
 
-        // Calculate position to center the pixels
-        float centerX = (800 - 28*6) / 2.0f;
-        float centerY = (600 - 28) / 2.0f;
-
-        // Position for drawing (raster position)
-        glRasterPos2f(centerX, centerY);
-
         // Calculate centered position
-        glDrawPixels(28*6, 28, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+        glDrawPixels(img_width * batch_size, img_height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
 
         glfwSwapBuffers(window);
 
