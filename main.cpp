@@ -162,8 +162,8 @@ int main(int, char**)
         glPixelZoom(scale, scale);
 
         // Calculate position to center the pixels
-        float centerX = (window_width - img_width * batch_size) / 2.0f;
-        float centerY = (window_height - img_height) / 2.0f;
+        float centerX = (window_width - img_width * batch_size * scale) / 2.0f;
+        float centerY = (window_height - img_height * scale) / 2.0f;
 
         // Position for drawing (raster position)
         glRasterPos2f(centerX, centerY);
