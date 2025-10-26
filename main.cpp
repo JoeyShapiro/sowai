@@ -119,7 +119,10 @@ int main(int, char**)
             input_names, input_tensors.data(), 2,
             output_names, 1
         );
-        // std::cout << "Inference completed: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count() << " microseconds\n";
+        // printf("Inference completed: %lld milliseconds\n",
+        //        std::chrono::duration_cast<std::chrono::milliseconds>(
+        //            std::chrono::high_resolution_clock::now() - start).count()
+        // );
     
         // Get output (28x28 image)
         float* output_data = output_tensors[0].GetTensorMutableData<float>();
@@ -146,14 +149,6 @@ int main(int, char**)
                 }
             }
         }
-
-        /*
-        TODO
-        just commit this gpu idea. it cant work, and dont like opengl
-        then try just drawing pixels. not sure i am saving a lot of resources with gpu. i mean, onnx is the real problem
-        then just use mfb. dont think it really goes to gpu
-        meh. this is fine for now
-        */
 
         glfwGetFramebufferSize(window, &window_width, &window_height);
         // Calculate scale factor to fill the window width
