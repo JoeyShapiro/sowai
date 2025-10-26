@@ -162,6 +162,7 @@ int main(int, char**)
         if (frame_start - last_frame >= frame_timer) {
             last_frame = frame_start;
             glfwGetFramebufferSize(window, &window_width, &window_height);
+            // TODO only do if size is different
             // Calculate scale factor to fill the window width
             float scale = (float)window_width / (img_width * batch_size);
             // Set pixel zoom to scale the image
