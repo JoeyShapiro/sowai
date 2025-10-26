@@ -24,6 +24,9 @@ int main(int, char**)
 
     int window_width = 800;
     int window_height = 600;
+    auto gen_timer = std::chrono::milliseconds(333);
+    auto frame_timer = std::chrono::milliseconds(120);
+    auto busy_timer = std::chrono::milliseconds(120);
 
     // Create window
     GLFWwindow* window = glfwCreateWindow(window_width, window_height, "sowai", NULL, NULL);
@@ -76,14 +79,15 @@ int main(int, char**)
     int64_t* label_shape = new int64_t[1]{batch_size};
 
     // Main loop
-    auto last_time = std::chrono::high_resolution_clock::now();
+    auto last_gen = std::chrono::high_resolution_clock::now();
+    auto last_frame = std::chrono::high_resolution_clock::now();
     while (!glfwWindowShouldClose(window))
     {
         auto frame_start = std::chrono::high_resolution_clock::now();
         glfwPollEvents();
 
-        if (frame_start - last_time >= std::chrono::milliseconds(333)) {
-            last_time = frame_start;
+        if (frame_start - last_gen >= gen_timer) {
+            last_gen = frame_start;
 
             time_t now = time(0);
             tm* ltm = localtime(&now);
@@ -155,35 +159,39 @@ int main(int, char**)
             }
         }
 
-
-        glfwGetFramebufferSize(window, &window_width, &window_height);
-        // Calculate scale factor to fill the window width
-        float scale = (float)window_width / (img_width * batch_size);
-        // Set pixel zoom to scale the image
-        glPixelZoom(scale, scale);
-
-        // Calculate position to center the pixels
-        float centerX = (window_width - img_width * batch_size * scale) / 2.0f;
-        float centerY = (window_height - img_height * scale) / 2.0f;
-
-        // Position for drawing (raster position)
-        glRasterPos2f(centerX, centerY);
-
-        // Rendering
-        // glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        // Set up orthographic projection to match window coordinates
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glOrtho(0, window_width, 0, window_height, -1, 1);
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-
-        // Calculate centered position
-        glDrawPixels(img_width * batch_size, img_height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-
-        glfwSwapBuffers(window);
+        if (frame_start - last_frame >= frame_timer) {
+            last_frame = frame_start;
+            glfwGetFramebufferSize(window, &window_width, &window_height);
+            // Calculate scale factor to fill the window width
+            float scale = (float)window_width / (img_width * batch_size);
+            // Set pixel zoom to scale the image
+            glPixelZoom(scale, scale);
+    
+            // Calculate position to center the pixels
+            float centerX = (window_width - img_width * batch_size * scale) / 2.0f;
+            float centerY = (window_height - img_height * scale) / 2.0f;
+    
+            // Position for drawing (raster position)
+            glRasterPos2f(centerX, centerY);
+    
+            // Rendering
+            // glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
+            glClear(GL_COLOR_BUFFER_BIT);
+    
+            // Set up orthographic projection to match window coordinates
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            glOrtho(0, window_width, 0, window_height, -1, 1);
+            glMatrixMode(GL_MODELVIEW);
+            glLoadIdentity();
+    
+            // Calculate centered position
+            glDrawPixels(img_width * batch_size, img_height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+    
+            glfwSwapBuffers(window);
+        } else {
+            std::this_thread::sleep_for(busy_timer);
+        }
     }
 
     // Cleanup
