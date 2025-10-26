@@ -34,7 +34,7 @@ int main(int, char**)
     }
 
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
+    glfwSwapInterval(1); // Enable vsync
 
     // Initialize random seed
     srand(time(NULL));
@@ -76,79 +76,85 @@ int main(int, char**)
     int64_t* label_shape = new int64_t[1]{batch_size};
 
     // Main loop
+    auto last_time = std::chrono::high_resolution_clock::now();
     while (!glfwWindowShouldClose(window))
     {
         auto frame_start = std::chrono::high_resolution_clock::now();
         glfwPollEvents();
 
-        time_t now = time(0);
-        tm* ltm = localtime(&now);
-        int hour = ltm->tm_hour%12;
-        int minute = ltm->tm_min;
-        int second = ltm->tm_sec;
-        labels[0] = hour / 10;
-        labels[1] = hour % 10;
-        labels[2] = minute / 10;
-        labels[3] = minute % 10;
-        labels[4] = second / 10;
-        labels[5] = second % 10;
+        if (frame_start - last_time >= std::chrono::milliseconds(333)) {
+            last_time = frame_start;
 
-        // Prepare noise: (6, 100)
-        for (int i = 0; i < 6 * 100; i++) {
-            noise[i] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-        }
-
-        Ort::Value noise_tensor = Ort::Value::CreateTensor<float>(
-            memory_info, noise, batch_size * 100,
-            noise_shape, 2
-        );
-        
-        Ort::Value label_tensor = Ort::Value::CreateTensor<int64_t>(
-            memory_info, labels, batch_size,
-            label_shape, 1
-        );
-        
-        // Run inference
-        input_tensors.clear();
-        input_tensors.push_back(std::move(noise_tensor));
-        input_tensors.push_back(std::move(label_tensor));
-
-        // auto start = std::chrono::high_resolution_clock::now();
-        auto output_tensors = session.Run(
-            Ort::RunOptions{nullptr},
-            input_names, input_tensors.data(), 2,
-            output_names, 1
-        );
-        // printf("Inference completed: %lld milliseconds\n",
-        //        std::chrono::duration_cast<std::chrono::milliseconds>(
-        //            std::chrono::high_resolution_clock::now() - start).count()
-        // );
+            time_t now = time(0);
+            tm* ltm = localtime(&now);
+            int hour = ltm->tm_hour%12;
+            int minute = ltm->tm_min;
+            int second = ltm->tm_sec;
+            labels[0] = hour / 10;
+            labels[1] = hour % 10;
+            labels[2] = minute / 10;
+            labels[3] = minute % 10;
+            labels[4] = second / 10;
+            labels[5] = second % 10;
     
-        // Get output (28x28 image)
-        float* output_data = output_tensors[0].GetTensorMutableData<float>();
-
-        // 2. Update pixel data each frame
-        // Fill your pixels array with RGBA values (0-255 each)
-        for (int b = 0; b < batch_size; b++) {
-            // Each image is 28x28, offset by b * 28 * 28
-            int offset = b * img_height * img_width;
+            // Prepare noise: (6, 100)
+            for (int i = 0; i < 6 * 100; i++) {
+                noise[i] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+            }
+    
+            Ort::Value noise_tensor = Ort::Value::CreateTensor<float>(
+                memory_info, noise, batch_size * 100,
+                noise_shape, 2
+            );
             
-            for (int y = 0; y < img_height; y++) {
-                for (int x = 0; x < img_width; x++) {
-                    int flipped_x = (img_height - 1 - x);
-                    int flipped_y = (img_width - 1 - y);
-
-                    // Position in the combined texture (6 images side by side)
-                    int tex_x = b * img_width + flipped_x;  // Horizontal offset for batch
-                    int i = (y * img_width * batch_size + tex_x) * 3;
-
-                    int pixel = output_data[offset + flipped_y * img_width + flipped_x] * 255;
-                    pixels[i + 0] = pixel; // Red
-                    pixels[i + 1] = pixel; // Green
-                    pixels[i + 2] = pixel; // Blue
+            Ort::Value label_tensor = Ort::Value::CreateTensor<int64_t>(
+                memory_info, labels, batch_size,
+                label_shape, 1
+            );
+            
+            // Run inference
+            input_tensors.clear();
+            input_tensors.push_back(std::move(noise_tensor));
+            input_tensors.push_back(std::move(label_tensor));
+    
+            // auto start = std::chrono::high_resolution_clock::now();
+            auto output_tensors = session.Run(
+                Ort::RunOptions{nullptr},
+                input_names, input_tensors.data(), 2,
+                output_names, 1
+            );
+            // printf("Inference completed: %lld milliseconds\n",
+            //        std::chrono::duration_cast<std::chrono::milliseconds>(
+            //            std::chrono::high_resolution_clock::now() - start).count()
+            // );
+        
+            // Get output (28x28 image)
+            float* output_data = output_tensors[0].GetTensorMutableData<float>();
+    
+            // 2. Update pixel data each frame
+            // Fill your pixels array with RGBA values (0-255 each)
+            for (int b = 0; b < batch_size; b++) {
+                // Each image is 28x28, offset by b * 28 * 28
+                int offset = b * img_height * img_width;
+                
+                for (int y = 0; y < img_height; y++) {
+                    for (int x = 0; x < img_width; x++) {
+                        int flipped_x = (img_height - 1 - x);
+                        int flipped_y = (img_width - 1 - y);
+    
+                        // Position in the combined texture (6 images side by side)
+                        int tex_x = b * img_width + flipped_x;  // Horizontal offset for batch
+                        int i = (y * img_width * batch_size + tex_x) * 3;
+    
+                        int pixel = output_data[offset + flipped_y * img_width + flipped_x] * 255;
+                        pixels[i + 0] = pixel; // Red
+                        pixels[i + 1] = pixel; // Green
+                        pixels[i + 2] = pixel; // Blue
+                    }
                 }
             }
         }
+
 
         glfwGetFramebufferSize(window, &window_width, &window_height);
         // Calculate scale factor to fill the window width
@@ -164,7 +170,7 @@ int main(int, char**)
         glRasterPos2f(centerX, centerY);
 
         // Rendering
-        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
+        // glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Set up orthographic projection to match window coordinates
@@ -178,15 +184,6 @@ int main(int, char**)
         glDrawPixels(img_width * batch_size, img_height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
 
         glfwSwapBuffers(window);
-
-        // Calculate elapsed time and sleep if needed
-        auto frame_end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = frame_end - frame_start;
-        
-        if (elapsed.count() < 0.33) {
-            std::chrono::duration<double> sleep_time(0.33 - elapsed.count());
-            std::this_thread::sleep_for(sleep_time);
-        }
     }
 
     // Cleanup
