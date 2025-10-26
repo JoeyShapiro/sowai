@@ -67,7 +67,7 @@ int main(int, char**)
 
     int img_width = 28;
     int img_height = 28;
-    int batch_size = 6;
+    int batch_size = 6; // TODO could try to batch multiple time samples all at once for performance
 
     unsigned char* pixels = new unsigned char[img_width * batch_size * img_height * 3];
     float* noise = new float[batch_size * 100];
