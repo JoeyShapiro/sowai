@@ -3,6 +3,8 @@ This is a clock app that generates the digits using Gen AI.
 This implementation uses MNIST and a custom CGAN format. It is good enough
 This is based on [sowon](https://github.com/tsoding/sowon)
 
+Video demoing it: https://www.youtube.com/watch?v=53GhsWzmWLw
+
 ## Requirements
 - GLFW
 - ONNX Runtime
